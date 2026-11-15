@@ -100,8 +100,17 @@ class HandsOnEpisode:
         self._phase, self._since, self._countdown_s = "idle", None, None
 
     def status(self) -> dict[str, object]:
-        """Return a JSON-friendly snapshot for ``/health`` and the viewer."""
+        """Return a JSON-friendly snapshot for ``/health`` and the viewer.
+
+        ``demo`` carries the demonstrator's counters (attempts, failures, deliberate failures),
+        which the plugin hides from the ``autopilot`` status while the autopilot is off.
+        """
+        from dataclasses import asdict  # noqa: PLC0415
+
+        from pick_place_demo import ACTIVE_STATS  # noqa: PLC0415
+
         return {
+            "demo": asdict(ACTIVE_STATS[0]) if ACTIVE_STATS else None,
             "enabled": True,
             "kind": "handson",
             "active": self._active,

@@ -19,7 +19,7 @@ Details of the original session (time, room, presenter, table setup) are in [SES
 | M2 | Studio connection | Run Studio; add the MuJoCo follower, virtual leader, and two IP cameras; record a few `conveyor_sort` episodes, train ACT briefly, and run the model. Check whether the iGPU (XPU) is used for training | The whole GUI workflow runs end to end | ✅ |
 | M3 | Cube demonstrator (drive mode) | Write a pick-and-place demonstrator in `sim-reproduction/` that reuses the plugin's SO-101 IK and hooks in through a launcher, without editing the plugin; test it in drive mode | 90%+ success over 20 trials, with the cube respawned at a random position after each success | ✅ |
 | M4 | Hands-on scene | Build the session's task scene: blue, red, and yellow cubes and a square PLACE AREA on the table; point the demonstrator at one target cube; test it in drive mode | 90%+ success over 20 trials in the hands-on scene | ✅ |
-| M5 | Leader-mode recording + deliberate failures | Add deliberate failures with recovery: **(A) missed grasp**, closing 1–2 cm off-centre and then grasping again; **(B) drop during the carry**, a shallow grasp that slips and a new pick where the cube lands. Connect the demonstrator as a virtual leader; record with **Start episode** → **Accept** in Studio, as at the session | Episodes saved and replayable in a dataset; failure rate, failure kinds, and seed set in the config | ⬜ |
+| M5 | Leader-mode recording + deliberate failures | Add deliberate failures with recovery: **(A) missed grasp**, closing 1–2 cm off-centre and then grasping again; **(B) drop during the carry**, a shallow grasp that slips and a new pick where the cube lands. Connect the demonstrator as a virtual leader; record with **Start episode** → **Accept** in Studio, as at the session | Episodes saved and replayable in a dataset; failure rate, failure kinds, and seed set in the config | ✅ |
 | M6 | Training and run | **(a) Session conditions:** a few episodes and ACT for 100 steps, then run the model. **(b) Scaled up:** about 50+ episodes and a longer training run, then run the model again | (a) matches the session (moves toward the cubes, does not finish); (b) success rate measured | ⬜ |
 | M7 | Write-up | Put code, configs, and results (success-rate table, videos) in `sim-reproduction/` and this README | Reproduction steps and results documented | ⬜ |
 
@@ -27,22 +27,27 @@ The scope is the hands-on session itself: the same scene, one cube picked and pl
 
 One episode picks one cube and places it in the PLACE AREA. A deliberate failure and its recovery stay inside the same episode; failures go into about 10–20% of episodes, at most one per episode, so most demonstrations stay clean. The cube positions are randomized each episode.
 
-### Pinned versions
+### Environment (M0–M2)
 
-Verified on 2026-11-14. The setup script will pin the same versions.
+The versions installed and checked in M0–M2, on 2026-11-14 and 15. The setup script will pin the same versions.
 
-| Component | Version |
-|---|---|
-| [physical-ai-studio](https://github.com/open-edge-platform/physical-ai-studio) | commit `8f1324161ece2b24f2d38765b6e943ed1961258c` |
-| [physicalai](https://github.com/openvinotoolkit/physicalai) (MuJoCo plugin) | commit `0ec06e9f38ac69170f391cf8343d83f7c6081668` (plugin 0.5.1.dev27, physicalai 0.4.1.dev7, MuJoCo 3.16.0, OpenVINO 2026.4.1) |
-| OS | WSL2, Ubuntu 24.04.5 LTS |
-| Python | 3.13.18 (via uv 0.13.8) |
-| Node.js / npm | v24.22.3 / 11.19.1 |
-| git / git-lfs | 2.43.0 / 3.4.1 |
-| ffmpeg | 6.1.1 |
-| Studio backend (`uv sync --extra xpu --extra sim-e2e`) | physicalai-studio 0.3.0, PyTorch 2.11.0+xpu, MuJoCo plugin 0.5.0 |
-| Intel GPU compute runtime (`ppa:kobuk-team/intel-graphics`) | libze-intel-gpu1 / intel-opencl-icd 26.40, IGC 2.42.14 |
-| WSL memory (`%USERPROFILE%\.wslconfig`) | `memory=22GB`, `swap=16GB` |
+| Component | Version | Set up in |
+|---|---|---|
+| OS | WSL2, Ubuntu 24.04.5 LTS | M0 |
+| Python | 3.13.18 (via uv 0.13.8) | M0 |
+| Node.js / npm | v24.22.3 / 11.19.1 | M0 |
+| git / git-lfs | 2.43.0 / 3.4.1 | M0 |
+| ffmpeg | 6.1.1 | M0 |
+| [physical-ai-studio](https://github.com/open-edge-platform/physical-ai-studio) | commit `8f1324161ece2b24f2d38765b6e943ed1961258c` | M0 |
+| [physicalai](https://github.com/openvinotoolkit/physicalai) | commit `0ec06e9f38ac69170f391cf8343d83f7c6081668` | M0 |
+| MuJoCo plugin (from the `physicalai` commit) | plugin 0.5.1.dev27, physicalai 0.4.1.dev7, MuJoCo 3.16.0, OpenVINO 2026.4.1 | M1 |
+| Studio backend (`uv sync --extra xpu --extra sim-e2e`) | physicalai-studio 0.3.0, PyTorch 2.11.0+xpu, MuJoCo plugin 0.5.0 | M2 |
+| Intel GPU compute runtime (`ppa:kobuk-team/intel-graphics`) | libze-intel-gpu1 / intel-opencl-icd 26.40, IGC 2.42.14 | M2 |
+| WSL memory (`%USERPROFILE%\.wslconfig`) | `memory=22GB`, `swap=16GB` | M2 |
+
+### M1 result
+
+The SO-101 ran in the `single_pick_place` scene at a real-time factor of 1.00x with 50 Hz control. Mesa in WSL renders on the CPU (llvmpipe) by default; with `export GALLIUM_DRIVER=d3d12` in `~/.bashrc`, MuJoCo renders on the Arc B390 (D3D12, OpenGL 4.6), and the two cameras reach 26.8 fps on AC power (about 22 fps on battery), above Studio's 24 fps floor. If the browser viewer at `http://127.0.0.1:9090` stays blank on Windows, an ad blocker that filters localhost traffic (AdGuard's "Filter localhost" option) can be the cause.
 
 ### M2 result
 
@@ -88,3 +93,22 @@ uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/r
 # in a second terminal
 python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --trials 20
 ```
+
+### M5 result
+
+<p align="center">
+  <img src="images/sim-m5-dataset.png" alt="The handson_session dataset in Physical AI Studio: six recorded episodes with wrist and overview video" width="80%">
+  <br>
+  <em>The <code>handson_session</code> dataset in Studio: six episodes of 6–8 s, each with the wrist and overview video and the follower's joints. E6 ends with the red cube in the PLACE AREA.</em>
+</p>
+
+Studio recorded 6 episodes into the dataset `handson_session` with **Start episode** → **Accept**, as at the session: 5 clean demonstrations and 1 with a deliberate drop during the carry, after which the arm picked the cube up again and placed it. The demonstrator acted as the leader arm (autopilot `leader` mode, read by Studio's MuJoCo Virtual Leader), and `record_helper.py` told when to click. Deliberate failures are set when the simulation starts: `HANDSON_FAILURE_RATE`, `HANDSON_FAILURE_KINDS` (`miss`, `drop`) and `HANDSON_SEED`.
+
+```bash
+cd ~/work/physicalai
+HANDSON_FAILURE_RATE=0 uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/run_sim.py start --scene handson_pick_place
+# start Studio, open the environment, turn on Teleoperate in the recording view, then:
+python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/record_helper.py --episodes 5
+```
+
+Before restarting the simulation, turn off **Teleoperate** and run `pkill -f _owner_worker`: the simulation's owner process can outlive `Ctrl+C`, and a new start then fails with `no state received from owner`.

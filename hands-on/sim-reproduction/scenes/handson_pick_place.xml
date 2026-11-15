@@ -59,8 +59,10 @@
 
     <frame name="robot_mount"/>
 
-    <!-- Same overview camera rig as single_pick_place. -->
-    <body name="overview_camera_rig" pos="-0.10 0.1 0.80" euler="-1.5707963267948966 -1.5707963267948966 0">
+    <!-- Overview camera: the plugin's rig, placed at the arm's front right (0.22, -0.38, 0.30) and
+         aimed at the mat (0.17, -0.05, 0) with compose.aim_overview_rig, so the whole mat, the cubes
+         and the PLACE AREA fill the frame, from about where the session photo of the table was taken. -->
+    <body name="overview_camera_rig" pos="0.22 -0.38 0.30" quat="0.04555 -0.05973 0.79294 -0.60465">
       <body name="overview_camera_tilt" euler="1.00 0 0">
         <camera name="overview" mode="fixed" euler="0 0 3.141592653589793" fovy="58"/>
       </body>
