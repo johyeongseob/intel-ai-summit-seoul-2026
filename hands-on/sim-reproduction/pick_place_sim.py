@@ -11,11 +11,15 @@ from its exported ``class_path``. So the hook lives in this importable module:
   plugin's function that picks a scene's demonstrator. For the ``single_pick_place``
   scene (which has none), it returns ``PickPlaceDemonstrator``.
 
+- Importing ``handson_scene`` registers the hands-on task scene, ``handson_pick_place``,
+  and ``PickPlaceMuJoCoRobot`` gives that scene its episode judge (``handson_episode.py``).
+
 ``run_sim.py`` puts this directory on ``PYTHONPATH`` so the owner process finds it.
 """
 
 from __future__ import annotations
 
+import handson_scene  # registers the handson_pick_place scene
 from physicalai_mujoco_plugin import conveyor_automation
 from physicalai_mujoco_plugin.robot import MuJoCoRobot
 from pick_place_demo import PickPlaceDemonstrator, is_pick_place_scene
@@ -41,4 +45,19 @@ if getattr(conveyor_automation._scene_demonstrator, "__module__", None) != __nam
 
 
 class PickPlaceMuJoCoRobot(MuJoCoRobot):
-    """The plugin's MuJoCo robot; importing its module installs the demonstrator hook."""
+    """The plugin's MuJoCo robot; importing its module installs the demonstrator hook.
+
+    In the hands-on scene it also swaps the plugin's cube-on-plate auto-reset for the
+    hands-on episode judge (``handson_episode.HandsOnEpisode``).
+    """
+
+    def _init_episode_auto_reset(self) -> None:
+        super()._init_episode_auto_reset()
+        sim = self._sim
+        if getattr(getattr(sim, "scene", None), "scene_id", None) != handson_scene.SCENE_ID:
+            return
+        from handson_episode import HandsOnEpisode  # noqa: PLC0415
+
+        helper = HandsOnEpisode(sim.model, self._run_scene_reset, active=self._auto_reset_active)
+        with self._state_lock:
+            self._episode_auto_reset = helper

@@ -1,6 +1,12 @@
-"""Scripted pick-and-place demonstrator for the MuJoCo plugin's ``single_pick_place`` scene.
+"""Scripted pick-and-place demonstrator for the cube scenes.
 
-One cycle (one episode) picks the cube and puts it on the target disc:
+It works in two scenes, with a config for each (:func:`config_for`):
+
+- the plugin's ``single_pick_place``: one 4 cm cube and a round target disc (M3);
+- the hands-on scene ``handson_pick_place``: 2 cm red, blue and yellow cubes and a square
+  PLACE AREA; it moves only the target cube (red by default) and leaves the others (M4).
+
+One cycle (one episode) picks the cube and puts it on the target:
 
 idle -> approach -> descend -> close -> lift -> carry -> lower -> release -> rise -> idle
 
@@ -29,6 +35,9 @@ class PickPlaceConfig:
     target: str = "target"
     cube_half: float = 0.02
     target_radius: float = 0.05
+    """Radius of a round target (the disc)."""
+    target_half: float | None = None
+    """Half side of a square target (the PLACE AREA); ``None`` for a round one."""
     grip_open: float = 0.8
     """Gripper angle while approaching; 0.5 gives a 5.2 cm gap, so this leaves room around a 4 cm cube."""
     grip_closed: float = -0.15
@@ -38,6 +47,13 @@ class PickPlaceConfig:
     carry_z: float = 0.10
     grasp_dz: float = 0.005
     """Grasp this far above the cube centre."""
+    jaw_offset: float = 0.0
+    """Put the grasp point this far from the cube centre along the jaw's closing axis.
+
+    The moving jaw pushes the cube against the fixed jaw. A small cube starts far from the fixed
+    jaw, so it slides that far as the jaws close; starting the grasp point this much to the
+    moving jaw's side puts the fixed jaw next to the cube instead.
+    """
     place_z: float = 0.045
     """Grasp point height when the jaws open over the target: the cube's bottom ~1.5 cm above the disc."""
     cart_speed: float = 0.25
@@ -48,6 +64,8 @@ class PickPlaceConfig:
     approach_timeout_s: float = 5.0
     lifted_dz: float = 0.03
     """The cube counts as lifted when its centre is this far above its resting height."""
+    max_failures: int = 3
+    """Failed tries in a row on one cube before asking for a scene reset (a cube out of reach)."""
 
 
 @dataclass
@@ -59,13 +77,42 @@ class PickPlaceStats:
     grasp_failed: int = 0
     dropped: int = 0
     timeouts: int = 0
+    missed: int = 0
+    """Released, but the cube did not end up on the target."""
+
+
+def handson_config(target_cube: str = "cube_red") -> PickPlaceConfig:
+    """Config for the hands-on scene: 2 cm cubes, a 53 mm square PLACE AREA about 32 cm out."""
+    return PickPlaceConfig(
+        cube=target_cube,
+        target="place_area",
+        cube_half=0.01,
+        target_half=0.0265,
+        grip_open=0.5,  # a 5.2 cm gap: room around a 2 cm cube, and the jaws clear cubes 8 cm away
+        home=(0.18, 0.0, 0.10),
+        hover_z=0.08,
+        carry_z=0.08,
+        # Tuned offline (90 of 90 episodes placed on the first try over six seeds):
+        grip_closed=0.0,  # a gentler squeeze: at -0.15 the 4.5 g cube sprang away ~2 cm on release
+        jaw_offset=0.01,  # a centred 2 cm cube slid ~18 mm to the fixed jaw while closing
+        place_z=0.017,  # the cube's bottom ~2 mm above the mat when the jaws open
+    )
+
+
+def config_for(model: object) -> PickPlaceConfig:
+    """The config for the scene *model* was built from: hands-on if it has the PLACE AREA."""
+    import mujoco  # noqa: PLC0415
+
+    if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "place_area") >= 0:
+        return handson_config()
+    return PickPlaceConfig()
 
 
 def is_pick_place_scene(model: object, config: PickPlaceConfig | None = None) -> bool:
     """Return whether *model* has the cube, the target and a single unprefixed SO-101."""
     import mujoco  # noqa: PLC0415
 
-    cfg = config or PickPlaceConfig()
+    cfg = config or config_for(model)
     bodies = (cfg.cube, cfg.target, "gripper")
     has_bodies = all(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name) >= 0 for name in bodies)
     has_arm = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, ARM_JOINTS[0]) >= 0
@@ -81,7 +128,7 @@ class PickPlaceDemonstrator:
 
         self._mujoco = mujoco
         self.model = model
-        self.config = config or PickPlaceConfig()
+        self.config = config or config_for(model)
         self.ik = ArmIK(model)
         self.stats = PickPlaceStats()
         body = mujoco.mjtObj.mjOBJ_BODY
@@ -114,14 +161,26 @@ class PickPlaceDemonstrator:
         self._setpoint = np.zeros(3)
         self._q: np.ndarray | None = None
         self._grip = self.config.grip_open
+        self._failures = 0
+        self._reset_requested = False
+        self._released = False
 
     def status(self) -> dict[str, object]:
         """Return the counters for ``/health`` (same keys every call)."""
         return asdict(self.stats)
 
-    def take_reset_request(self) -> bool:  # noqa: PLR6301
-        """Never ask for a scene reset: a failed grasp is simply retried."""
-        return False
+    def take_reset_request(self) -> bool:
+        """Return ``True`` once after ``max_failures`` failed tries in a row (say, a cube out of reach).
+
+        A failed try is otherwise simply retried from where the cube lies.
+        """
+        requested, self._reset_requested = self._reset_requested, False
+        return requested
+
+    def _failed(self) -> None:
+        self._failures += 1
+        if self._failures >= self.config.max_failures:
+            self._failures, self._reset_requested = 0, True
 
     # --- Geometry --------------------------------------------------------------
 
@@ -133,9 +192,13 @@ class PickPlaceDemonstrator:
         return self._cube_pos(data)[2] < self.config.cube_half + 0.01 and speed < 0.05  # noqa: PLR2004
 
     def _on_target(self, data: object) -> bool:
+        cfg = self.config
         cube, target = self._cube_pos(data), data.xpos[self._target]
-        planar = float(np.hypot(cube[0] - target[0], cube[1] - target[1]))
-        return planar <= self.config.target_radius - 0.005 and cube[2] < self.config.cube_half + 0.01  # noqa: PLR2004
+        if cfg.target_half is not None:  # square PLACE AREA: the cube's centre inside it
+            inside = bool(np.all(np.abs(cube[:2] - target[:2]) <= cfg.target_half))
+        else:  # round disc
+            inside = float(np.hypot(cube[0] - target[0], cube[1] - target[1])) <= cfg.target_radius - 0.005  # noqa: PLR2004
+        return inside and cube[2] < cfg.cube_half + 0.01  # noqa: PLR2004
 
     def _cube_yaw(self, data: object) -> float:
         """Yaw of the cube's most horizontal face normal (any face up works for a cube)."""
@@ -196,11 +259,17 @@ class PickPlaceDemonstrator:
 
         if self._phase == "idle":
             self._grip = cfg.grip_open
+            self._released = False
             self._move_toward(np.array(cfg.home), dt)
             if self._resting(data) and not self._on_target(data):
                 self._yaw = self._choose_yaw(data, grasp)
                 self.stats.attempts += 1
                 self._go("approach", now)
+        # Shift the grasp point toward the moving jaw (see PickPlaceConfig.jaw_offset).
+        grasp = grasp + cfg.jaw_offset * np.array([np.cos(self._yaw), np.sin(self._yaw), 0.0])
+
+        if self._phase == "idle":
+            pass
         elif self._phase == "approach":
             goal = np.array([grasp[0], grasp[1], cfg.hover_z])
             self._move_toward(goal, dt)
@@ -209,6 +278,7 @@ class PickPlaceDemonstrator:
                 self._go("descend", now)
             elif now - self._since > cfg.approach_timeout_s:
                 self.stats.timeouts += 1
+                self._failed()
                 self._go("rise", now)
         elif self._phase == "descend":
             self._move_toward(grasp, dt, cfg.descend_speed)
@@ -224,11 +294,13 @@ class PickPlaceDemonstrator:
                     self._go("carry", now)
                 else:
                     self.stats.grasp_failed += 1
+                    self._failed()
                     self._grip = cfg.grip_open
                     self._go("rise", now)
         elif self._phase == "carry":
             if cube[2] < cfg.cube_half + 0.01:  # noqa: PLR2004 - fell out of the jaws
                 self.stats.dropped += 1
+                self._failed()
                 self._grip = cfg.grip_open
                 self._go("rise", now)
             else:
@@ -242,6 +314,7 @@ class PickPlaceDemonstrator:
         elif self._phase == "lower":
             if self._raise_to(cfg.place_z, dt, cfg.descend_speed):
                 self._grip = cfg.grip_open
+                self._released = True
                 self._go("release", now)
         elif self._phase == "release":
             self._grip = cfg.grip_open
@@ -250,8 +323,12 @@ class PickPlaceDemonstrator:
         elif self._phase == "rise":
             self._grip = cfg.grip_open
             if self._raise_to(cfg.hover_z, dt):
-                if self._on_target(data):
+                if self._released and self._on_target(data):
                     self.stats.placed += 1
+                    self._failures = 0
+                elif self._released:
+                    self.stats.missed += 1
+                    self._failed()
                 self._go("idle", now)
 
         self._q, _ = self.ik.solve(self._q, self._setpoint, self._yaw)

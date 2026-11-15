@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<!-- The Intel AI Summit Seoul 2026 hands-on task: blue, red and yellow 2 cm cubes and a square
+     PLACE AREA on a dark work mat, in front of one SO-101. The plugin attaches the arm at
+     robot_mount (the origin, facing +x). Registered as the `handson_pick_place` scene by
+     handson_scene.py, which also randomizes the three cubes on every reset. -->
+<mujoco model="handson_pick_place">
+  <compiler angle="radian" autolimits="true"/>
+  <!-- Same physics settings as the plugin's single_pick_place scene. -->
+  <option integrator="implicitfast" timestep="0.002" cone="elliptic" iterations="10" ls_iterations="50" impratio="10"/>
+
+  <visual>
+    <headlight diffuse="0.0 0.0 0.0" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.62 0.80 0.96 1"/>
+    <quality shadowsize="8192" offsamples="8"/>
+  </visual>
+  <default>
+    <geom condim="4"/>
+    <default class="mark">
+      <!-- Drawn on the mat: seen by the cameras, never touched by the arm or the cubes. -->
+      <geom type="box" contype="0" conaffinity="0" group="1"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.53 0.81 0.98" rgb2="0.20 0.35 0.55" width="512" height="3072"/>
+    <texture type="2d" name="floor" builtin="checker" mark="edge" rgb1="0.36 0.37 0.39" rgb2="0.32 0.33 0.35"
+             markrgb="0.45 0.46 0.48" width="300" height="300"/>
+    <material name="floor" texture="floor" texuniform="true" texrepeat="4 4"/>
+    <!-- The work mat, drawn by make_mat_texture.py: like the session's mat (10 mm grid, axes in mm,
+         dashed PLACE AREA), without its printing or logos. -->
+    <texture type="2d" name="mat" file="handson_mat.png"/>
+    <material name="mat" texture="mat" specular="0.1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="1 1 3.5" dir="-0.227 -0.268 -0.936" directional="false" cutoff="25" exponent="1" diffuse="0.5 0.5 0.5"/>
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5" castshadow="false"/>
+    <geom name="floor" type="plane" size="0 0 0.01" pos="0 0 0" material="floor" condim="3" friction="0.5 0.005 0.0001"/>
+
+    <!-- Work mat: 35 x 30 cm, a visual layer 1 mm thick on the floor. As at the session, the arm
+         stands at its long edge (mat Y = 0) at mat X = 100 mm, facing across it (see make_mat_texture.py). -->
+    <geom name="mat" class="mark" size="0.15 0.175 0.0005" pos="0.21 -0.075 0.0005" material="mat"/>
+
+    <!-- PLACE AREA: a 5.3 cm square drawn on the mat at mat (X 250, Y 225) mm. This body only marks its centre. -->
+    <body name="place_area" pos="0.285 -0.15 0.001"/>
+
+    <!-- The three cubes; every reset moves them to random positions in front of the arm. -->
+    <body name="cube_red" pos="0.21 0.05 0.01">
+      <joint type="free" name="cube_red:joint" damping="0" frictionloss="0" armature="0"/>
+      <geom name="cube_red" type="box" size="0.01 0.01 0.01" rgba="0.90 0.12 0.10 1" mass="0.0045"/>
+    </body>
+    <body name="cube_blue" pos="0.15 -0.03 0.01">
+      <joint type="free" name="cube_blue:joint" damping="0" frictionloss="0" armature="0"/>
+      <geom name="cube_blue" type="box" size="0.01 0.01 0.01" rgba="0.10 0.38 0.95 1" mass="0.0045"/>
+    </body>
+    <body name="cube_yellow" pos="0.29 0.03 0.01">
+      <joint type="free" name="cube_yellow:joint" damping="0" frictionloss="0" armature="0"/>
+      <geom name="cube_yellow" type="box" size="0.01 0.01 0.01" rgba="1.00 0.84 0.05 1" mass="0.0045"/>
+    </body>
+
+    <frame name="robot_mount"/>
+
+    <!-- Same overview camera rig as single_pick_place. -->
+    <body name="overview_camera_rig" pos="-0.10 0.1 0.80" euler="-1.5707963267948966 -1.5707963267948966 0">
+      <body name="overview_camera_tilt" euler="1.00 0 0">
+        <camera name="overview" mode="fixed" euler="0 0 3.141592653589793" fovy="58"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

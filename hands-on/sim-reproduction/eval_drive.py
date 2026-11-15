@@ -1,8 +1,9 @@
 """Run the pick-and-place demonstrator in drive mode and measure its success rate.
 
-Start the simulation with run_sim.py first. A success is judged by the plugin's own
-episode auto-reset: the cube rests on the target disc for the success dwell, then
-the plugin respawns it at a random position, and the demonstrator picks it again.
+Start the simulation with run_sim.py first. A success is judged by the scene's episode
+judge, independently of the demonstrator: in single_pick_place the plugin's auto-reset (the
+cube rests on the disc for 5 s), in handson_pick_place handson_episode.py (the red cube rests
+in the PLACE AREA for 2 s). Then the scene respawns the cube(s) and the demonstrator goes again.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import json
 import time
 import urllib.request
 
-FAIL_KEYS = ("grasp_failed", "dropped", "timeouts")
+FAIL_KEYS = ("grasp_failed", "dropped", "timeouts", "missed")
 
 
 def get(url: str) -> dict:
@@ -79,7 +80,7 @@ def main() -> None:
     done, successes = (p - p0) + (f - f0), e - e0
     print(f"\nTrials {done}, successes {successes}, failures {f - f0}")
     if done:
-        print(f"Success rate: {100 * successes / done:.0f}%  (M3 goal: 90%+)")
+        print(f"Success rate: {100 * successes / done:.0f}%  (goal: 90%+)")
 
 
 if __name__ == "__main__":

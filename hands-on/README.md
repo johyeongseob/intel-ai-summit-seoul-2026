@@ -18,7 +18,7 @@ Details of the original session (time, room, presenter, table setup) are in [SES
 | M1 | Simulator check | Install the MuJoCo plugin and start the SO-101 in the `single_pick_place` scene | Cameras near 30 fps and real-time factor near 1.00x in the browser viewer | ✅ |
 | M2 | Studio connection | Run Studio; add the MuJoCo follower, virtual leader, and two IP cameras; record a few `conveyor_sort` episodes, train ACT briefly, and run the model. Check whether the iGPU (XPU) is used for training | The whole GUI workflow runs end to end | ✅ |
 | M3 | Cube demonstrator (drive mode) | Write a pick-and-place demonstrator in `sim-reproduction/` that reuses the plugin's SO-101 IK and hooks in through a launcher, without editing the plugin; test it in drive mode | 90%+ success over 20 trials, with the cube respawned at a random position after each success | ✅ |
-| M4 | Hands-on scene | Build the session's task scene: blue, red, and yellow cubes and a square PLACE AREA on the table; point the demonstrator at one target cube; test it in drive mode | 90%+ success over 20 trials in the hands-on scene | ⬜ |
+| M4 | Hands-on scene | Build the session's task scene: blue, red, and yellow cubes and a square PLACE AREA on the table; point the demonstrator at one target cube; test it in drive mode | 90%+ success over 20 trials in the hands-on scene | ✅ |
 | M5 | Leader-mode recording + deliberate failures | Add deliberate failures with recovery: **(A) missed grasp**, closing 1–2 cm off-centre and then grasping again; **(B) drop during the carry**, a shallow grasp that slips and a new pick where the cube lands. Connect the demonstrator as a virtual leader; record with **Start episode** → **Accept** in Studio, as at the session | Episodes saved and replayable in a dataset; failure rate, failure kinds, and seed set in the config | ⬜ |
 | M6 | Training and run | **(a) Session conditions:** a few episodes and ACT for 100 steps, then run the model. **(b) Scaled up:** about 50+ episodes and a longer training run, then run the model again | (a) matches the session (moves toward the cubes, does not finish); (b) success rate measured | ⬜ |
 | M7 | Write-up | Put code, configs, and results (success-rate table, videos) in `sim-reproduction/` and this README | Reproduction steps and results documented | ⬜ |
@@ -68,6 +68,17 @@ The scripted demonstrator ([`sim-reproduction/`](sim-reproduction/)) placed the 
 ```bash
 cd ~/work/physicalai
 uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/run_sim.py start --scene single_pick_place
+# in a second terminal
+python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --trials 20
+```
+
+### M4 result
+
+The hands-on scene, `handson_pick_place`, copies the session's table: blue, red, and yellow 2 cm cubes and a square PLACE AREA on a work mat with a millimetre grid. In drive mode the demonstrator moved the red cube into the PLACE AREA in **20 of 20 trials (100%)**; an episode judge in the scene counted each success and then reset the cubes to random positions.
+
+```bash
+cd ~/work/physicalai
+uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/run_sim.py start --scene handson_pick_place
 # in a second terminal
 python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --trials 20
 ```
