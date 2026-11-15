@@ -4,7 +4,7 @@ It works in two scenes, with a config for each (:func:`config_for`):
 
 - the plugin's ``single_pick_place``: one 4 cm cube and a round target disc (M3);
 - the hands-on scene ``handson_pick_place``: 2 cm red, blue and yellow cubes and a square
-  PLACE AREA; it moves only the target cube (red by default) and leaves the others (M4).
+  PLACE AREA; each episode it moves one cube picked at random and leaves the others.
 
 One cycle (one episode) picks the cube and puts it on the target:
 
@@ -18,7 +18,7 @@ implements the plugin's ``Demonstrator`` protocol, so the autopilot can run it i
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -69,6 +69,9 @@ class PickPlaceConfig:
     close_s: float = 0.4
     release_s: float = 0.4
     approach_timeout_s: float = 5.0
+    """Longest a moving phase may take (time spent waiting for the arm in leader mode not counted)."""
+    blocked_s: float = 1.5
+    """An arm that holds its commanded targets but stays short of them this long counts as blocked."""
     lifted_dz: float = 0.03
     """The cube counts as lifted when its centre is this far above its resting height."""
     max_failures: int = 3
@@ -103,6 +106,16 @@ class PickPlaceConfig:
     drop_ease_s: tuple[float, float] = (0.4, 1.0)
     """``drop``: seconds the grip takes to ease, drawn per failure, so the cube falls at different points."""
 
+    # Which cube an episode moves.
+    cubes: tuple[str, ...] = ()
+    """The cubes an episode may move; empty: only ``cube``."""
+    random_target: bool = False
+    """Pick one of ``cubes`` at random for each episode, whatever their positions; else always ``cube``.
+
+    The draw comes from a shuffled bag of all the cubes, refilled when empty, so the colours
+    come up equally often over a recording session.
+    """
+
 
 @dataclass
 class PickPlaceStats:
@@ -119,12 +132,19 @@ class PickPlaceStats:
     """Deliberate ``miss`` failures started."""
     injected_drop: int = 0
     """Deliberate ``drop`` failures started."""
+    picked: dict[str, int] = field(default_factory=dict)
+    """Episodes started per target cube."""
 
 
-def handson_config(target_cube: str = "cube_red") -> PickPlaceConfig:
-    """Config for the hands-on scene: 2 cm cubes, a 53 mm square PLACE AREA about 25 cm out."""
+def handson_config() -> PickPlaceConfig:
+    """Config for the hands-on scene: 2 cm cubes, a 53 mm square PLACE AREA about 25 cm out.
+
+    Each episode moves one of the three cubes, picked at random, as people picked any cube at the session.
+    """
     return PickPlaceConfig(
-        cube=target_cube,
+        cube="cube_red",
+        cubes=("cube_red", "cube_blue", "cube_yellow"),
+        random_target=True,
         target="place_area",
         cube_half=0.01,
         target_half=0.0265,
@@ -142,9 +162,9 @@ def handson_config(target_cube: str = "cube_red") -> PickPlaceConfig:
 def config_for(model: object) -> PickPlaceConfig:
     """The config for the scene *model* was built from: hands-on if it has the PLACE AREA.
 
-    Deliberate failures come from environment variables, which ``run_sim.py`` passes on to the
-    simulation process: ``HANDSON_FAILURE_RATE`` (0 to 1, default 0), ``HANDSON_FAILURE_KINDS``
-    (comma-separated, default ``miss,drop``) and ``HANDSON_SEED``.
+    Environment variables, which ``run_sim.py`` passes on to the simulation process, set the
+    deliberate failures: ``HANDSON_FAILURE_RATE`` (0 to 1, default 0), ``HANDSON_FAILURE_KINDS``
+    (comma-separated, default ``miss,drop``) and ``HANDSON_SEED`` (also for the cube draws).
     """
     import os  # noqa: PLC0415
 
@@ -186,10 +206,14 @@ class PickPlaceDemonstrator:
         self.stats = PickPlaceStats()
         ACTIVE_STATS[:] = [self.stats]
         body = mujoco.mjtObj.mjOBJ_BODY
-        self._cube = int(mujoco.mj_name2id(model, body, self.config.cube))
         self._target = int(mujoco.mj_name2id(model, body, self.config.target))
-        joint = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{self.config.cube}:joint"))
-        self._cube_dof = int(model.jnt_dofadr[joint])
+        # Body and velocity address of every cube an episode may move.
+        self._cube_ids: dict[str, tuple[int, int]] = {}
+        for name in self.config.cubes or (self.config.cube,):
+            joint = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{name}:joint"))
+            self._cube_ids[name] = (int(mujoco.mj_name2id(model, body, name)), int(model.jnt_dofadr[joint]))
+        self._bag: list[str] = []
+        self._set_cube(self.config.cube)
         self._actuators = [
             int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)) for name in (*ARM_JOINTS, GRIPPER)
         ]
@@ -198,6 +222,10 @@ class PickPlaceDemonstrator:
         self._grip_dadr = int(model.jnt_dofadr[grip_joint])
         self._rng = np.random.default_rng(self.config.seed)
         self._waiting = False
+        self._ik_err = 0.0
+        """Position error the IK left for the current target; large when it is out of reach."""
+        self._last_targets: np.ndarray | None = None
+        self._blocked_since: float | None = None
         self.reset()
 
     # --- Demonstrator protocol -------------------------------------------------
@@ -210,7 +238,19 @@ class PickPlaceDemonstrator:
     @property
     def target(self) -> str | None:
         """The cube while a cycle runs, else ``None``."""
-        return None if self._phase == "idle" else self.config.cube
+        return None if self._phase == "idle" else self._cube_name
+
+    def _set_cube(self, name: str) -> None:
+        self._cube_name = name
+        self._cube, self._cube_dof = self._cube_ids[name]
+
+    def _next_cube(self) -> str:
+        """The cube for a new episode: ``cube``, or the next one from a shuffled bag of ``cubes``."""
+        if not self.config.random_target:
+            return self.config.cube
+        if not self._bag:
+            self._bag = [str(name) for name in self._rng.permutation(list(self.config.cubes))]
+        return self._bag.pop()
 
     def reset(self) -> None:
         """Forget the cycle; the next step starts from the arm's current pose.
@@ -225,6 +265,8 @@ class PickPlaceDemonstrator:
         """The failure this episode's first try will make, if any."""
         self._failure: str | None = None
         """The failure the current try is making."""
+        self._episode_cube: str | None = None
+        """This episode's target cube, drawn on its first tick (retries keep it)."""
         self._ease_s = 1.0
         self._carry_start = 0.0
         self._idle_since = float("inf")
@@ -332,6 +374,10 @@ class PickPlaceDemonstrator:
             self._q = data.qpos[self.ik.qpos_adr].copy()
             self._setpoint = self.ik.tcp(data).copy()
             self._yaw = self.ik.gripper_yaw(data)
+        if self._episode_cube is None:  # a new episode: draw its target cube
+            self._episode_cube = self._next_cube()
+            self._set_cube(self._episode_cube)
+            self.stats.picked[self._episode_cube] = self.stats.picked.get(self._episode_cube, 0) + 1
         cube = self._cube_pos(data)
         grasp = cube + np.array([0.0, 0.0, cfg.grasp_dz])
 
@@ -368,9 +414,26 @@ class PickPlaceDemonstrator:
         tcp = self.ik.tcp(data)
         there = float(np.linalg.norm(tcp - self._setpoint)) < cfg.follow_tol
         jaws_still = abs(float(data.qvel[self._grip_dadr])) < 0.3  # noqa: PLR2004
-        self._waiting = self._phase != "idle" and not there
+        # Only an arm that is not yet being driven is worth waiting for. A target the IK cannot
+        # reach, or an arm that has been commanded there but stays short of it (folded against
+        # its own base near a close cube, say), lets the phase's timeout run instead, so the try
+        # fails and is retried or the scene reset.
+        commanded = self._last_targets is not None and float(
+            np.max(np.abs(data.ctrl[self._actuators[:-1]] - self._last_targets[:-1]))
+        ) < 0.05  # noqa: PLR2004 - the actuators hold the targets: drive mode, or Studio following
+        if there or not commanded:
+            self._blocked_since = None
+        elif self._blocked_since is None:
+            self._blocked_since = now
+        blocked = self._blocked_since is not None and now - self._blocked_since > cfg.blocked_s
+        self._waiting = self._phase != "idle" and not there and self._ik_err < cfg.follow_tol and not blocked
         if self._waiting:
             self._since += dt
+        if self._phase not in {"idle", "close", "release"} and now - self._since > cfg.approach_timeout_s:
+            self.stats.timeouts += 1  # a phase that cannot finish: give up this try
+            self._failed()
+            self._failure, self._grip = None, cfg.grip_open
+            self._go("idle" if self._phase == "rise" else "rise", now)
 
         if self._phase == "idle":
             pass
@@ -380,10 +443,6 @@ class PickPlaceDemonstrator:
             lined_up = _yaw_distance(self.ik.gripper_yaw(data), self._yaw) < np.radians(5)
             if np.linalg.norm(self._setpoint - goal) < 0.003 and lined_up and there:  # noqa: PLR2004
                 self._go("descend", now)
-            elif now - self._since > cfg.approach_timeout_s:
-                self.stats.timeouts += 1
-                self._failed()
-                self._go("rise", now)
         elif self._phase == "descend":
             self._move_toward(grasp, dt, cfg.descend_speed)
             if np.linalg.norm(self._setpoint - grasp) < 0.002 and np.linalg.norm(tcp - grasp) < 0.006:  # noqa: PLR2004
@@ -442,8 +501,9 @@ class PickPlaceDemonstrator:
                     self._failed()
                 self._go("idle", now)
 
-        self._q, _ = self.ik.solve(self._q, self._setpoint, self._yaw)
+        self._q, self._ik_err = self.ik.solve(self._q, self._setpoint, self._yaw)
         targets = np.array([*self._q, self._grip], dtype=np.float64)
+        self._last_targets = targets
         if apply:
             for actuator, value in zip(self._actuators, targets, strict=True):
                 data.ctrl[actuator] = value

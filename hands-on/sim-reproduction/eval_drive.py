@@ -2,8 +2,8 @@
 
 Start the simulation with run_sim.py first. A success is judged by the scene's episode
 judge, independently of the demonstrator: in single_pick_place the plugin's auto-reset (the
-cube rests on the disc for 5 s), in handson_pick_place handson_episode.py (the red cube rests
-in the PLACE AREA for 2 s). Then the scene respawns the cube(s) and the demonstrator goes again.
+cube rests on the disc for 5 s), in handson_pick_place handson_episode.py (a cube rests in the
+PLACE AREA for 2 s). Then the scene respawns the cube(s) and the demonstrator goes again.
 """
 
 from __future__ import annotations

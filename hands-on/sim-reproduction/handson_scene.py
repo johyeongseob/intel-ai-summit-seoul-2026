@@ -41,9 +41,9 @@ PLACE_AREA_HALF = 0.0265
 MAT_XY = ((0.075, 0.275), (-0.215, 0.085))
 """Where cube centres may go: the mat (world x 0.06-0.29, y -0.23 to 0.10) less 15 mm at the edges."""
 
-# Cubes spawn on an arc in front of the arm, on the mat: x 0.12-0.27 m, y -0.06 to +0.08 m.
+# Cubes spawn on an arc in front of the arm, on the mat: x 0.17-0.27 m, y -0.05 to +0.08 m.
 SPAWN_CENTER = (0.0, -0.01)
-SPAWN_MIN_R, SPAWN_MAX_R = 0.13, 0.27
+SPAWN_MIN_R, SPAWN_MAX_R = 0.18, 0.27  # within ~17 cm of the base the arm cannot fold down over a cube
 SPAWN_ANGLE_HALF_DEG = 20.0
 CUBE_MIN_SEP = 0.08
 """Cube centres at least 8 cm apart, so the open jaws never touch a neighbour."""

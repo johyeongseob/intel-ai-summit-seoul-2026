@@ -6,7 +6,8 @@ this script tells you when to click, so each recorded episode is exactly one pic
 
 1. it turns the autopilot off and resets the scene (arm at home, cubes at new positions);
 2. you click **Start episode** in Studio and press Enter here;
-3. it turns the demonstrator on; the arm picks the red cube and places it in the PLACE AREA,
+3. it turns the demonstrator on; the arm picks the episode's cube (picked at random) and places
+   it in the PLACE AREA,
    recovering from a deliberate failure if this episode has one, and goes back home;
 4. it turns the autopilot off again and you click **Accept** in Studio (or **Discard**).
 
@@ -76,7 +77,10 @@ def run_episode(url: str, index: int, total: int, timeout_s: float) -> bool:
     injected = [kind for kind in ("miss", "drop") if (after.get(f"injected_{kind}") or 0) > (before.get(f"injected_{kind}") or 0)]
     failures = sum((after.get(key) or 0) - (before.get(key) or 0) for key in FAIL_KEYS)
     note = f"deliberate {'/'.join(injected)} failure, {failures} failed tries, recovered" if injected else "clean"
-    print(f"  Done in {time.monotonic() - started:.1f} s ({note}). Click 'Accept' in Studio.")
+    picked_before, picked_after = before.get("picked") or {}, after.get("picked") or {}
+    cubes = [name.removeprefix("cube_") for name in picked_after if picked_after[name] > picked_before.get(name, 0)]
+    cube = f"{'/'.join(cubes)} cube, " if cubes else ""
+    print(f"  Done in {time.monotonic() - started:.1f} s ({cube}{note}). Click 'Accept' in Studio.")
     return True
 
 
