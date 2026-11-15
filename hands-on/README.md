@@ -19,7 +19,7 @@ Details of the original session (time, room, presenter, table setup) are in [SES
 | M2 | Studio connection | Run Studio; add the MuJoCo follower, virtual leader, and two IP cameras; record a few `conveyor_sort` episodes, train ACT briefly, and run the model. Check whether the iGPU (XPU) is used for training | The whole GUI workflow runs end to end | ✅ |
 | M3 | Cube demonstrator (drive mode) | Write a pick-and-place demonstrator in `sim-reproduction/` that reuses the plugin's SO-101 IK and hooks in through a launcher, without editing the plugin; test it in drive mode | 90%+ success over 20 trials, with the cube respawned at a random position after each success | ✅ |
 | M4 | Hands-on scene | Build the session's task scene: blue, red, and yellow cubes and a square PLACE AREA on the table; have the demonstrator move one cube per episode; test it in drive mode | 90%+ success over 20 trials in the hands-on scene | ✅ |
-| M5 | Recording | Record the training set in Studio with **Start episode** → **Accept**, as at the session: about 50 episodes, each moving one cube picked at random, with the demonstrator as a virtual leader. Include deliberate failures with recovery: **(A) missed grasp**, closing beside the cube and then grasping again; **(B) drop during the carry**, a shallow grasp that slips and a new pick where the cube lands | Episodes saved and replayable in a dataset; target, failure rate, failure kinds, and seed set at launch | ⬜ |
+| M5 | Recording | Record the training set in Studio with **Start episode** → **Accept**, as at the session: about 50 episodes, each moving one cube picked at random, with the demonstrator as a virtual leader. Include deliberate failures with recovery: **(A) missed grasp**, closing beside the cube and then grasping again; **(B) drop during the carry**, a shallow grasp that slips and a new pick where the cube lands | Episodes saved and replayable in a dataset; the three colours about equally often; failure rate, failure kinds, and seed set at launch | ⬜ |
 | M6 | Training and run | Train ACT on the M5 dataset on the iGPU (XPU), export to OpenVINO, run the model in Studio, and measure it with the episode judge | Success rate measured | ⬜ |
 | M7 | Write-up | Put code, configs, and results (success-rate table, videos) in `sim-reproduction/` and this README | Reproduction steps and results documented | ⬜ |
 
@@ -85,7 +85,7 @@ python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --t
   <em>The simulated work mat, with ticks to X 300 and Y 200 mm as on the session mat. The arm stands below the X axis at X = 100 mm, facing +Y.</em>
 </p>
 
-The hands-on scene, `handson_pick_place`, copies the session's table: blue, red, and yellow 2 cm cubes and a square PLACE AREA on a work mat with a millimetre grid. In drive mode the demonstrator moved the cube into the PLACE AREA in **20 of 20 trials (100%)** when it always took the red one, and in **9 of 9** once each episode's cube was picked at random; an episode judge in the scene counted each success and then reset the cubes to random positions.
+The hands-on scene, `handson_pick_place`, copies the session's table: blue, red, and yellow 2 cm cubes and a square PLACE AREA on a work mat with a millimetre grid. Each episode the demonstrator picks one of the three cubes at random. In drive mode it moved that cube into the PLACE AREA in **20 of 20 trials (100%)**; an episode judge in the scene counted each success and then reset the cubes to random positions.
 
 ```bash
 cd ~/work/physicalai
@@ -94,23 +94,4 @@ uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/r
 python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --trials 20
 ```
 
-### M5 rehearsal (red cube only)
-
-A first recording, made while the demonstrator still always took the red cube, to check the recording path before the M5 training set; the "M5 result" will replace this section.
-
-<p align="center">
-  <img src="images/sim-m5-dataset.png" alt="The handson_session dataset in Physical AI Studio: six recorded episodes with wrist and overview video" width="80%">
-  <br>
-  <em>The <code>handson_session</code> dataset in Studio: six episodes of 6–8 s, each with the wrist and overview video and the follower's joints. E6 ends with the red cube in the PLACE AREA.</em>
-</p>
-
-Studio recorded 6 episodes into the dataset `handson_session` with **Start episode** → **Accept**, as at the session: 5 clean demonstrations and 1 with a deliberate drop during the carry, after which the arm picked the cube up again and placed it. The demonstrator acted as the leader arm (autopilot `leader` mode, read by Studio's MuJoCo Virtual Leader), and `record_helper.py` told when to click. The deliberate failures are set when the simulation starts: `HANDSON_FAILURE_RATE`, `HANDSON_FAILURE_KINDS` (`miss`, `drop`) and `HANDSON_SEED`.
-
-```bash
-cd ~/work/physicalai
-HANDSON_FAILURE_RATE=0 uv run --no-sync python ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/run_sim.py start --scene handson_pick_place
-# start Studio, open the environment, turn on Teleoperate in the recording view, then:
-python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/record_helper.py --episodes 5
-```
-
-Before restarting the simulation, turn off **Teleoperate** and run `pkill -f _owner_worker`: the simulation's owner process can outlive `Ctrl+C`, and a new start then fails with `no state received from owner`.
+Before restarting the simulation, turn off **Teleoperate** in Studio and run `pkill -f _owner_worker`: the simulation's owner process can outlive `Ctrl+C`, and a new start then fails with `no state received from owner`.
