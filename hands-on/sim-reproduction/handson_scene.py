@@ -34,15 +34,17 @@ CUBE_JOINTS = tuple(f"{cube}:joint" for cube in CUBES)
 CUBE_HALF = 0.01
 """Half the cube's edge, in metres."""
 PLACE_AREA = "place_area"
-PLACE_AREA_XY = (0.285, -0.15)
-"""World position of the PLACE AREA's centre; must match the XML and make_mat_texture.py."""
+PLACE_AREA_XY = (0.21, -0.13)
+"""World position of the PLACE AREA's centre (mat X 230, Y 150 mm); must match the XML and make_mat_texture.py."""
 PLACE_AREA_HALF = 0.0265
 """Half the PLACE AREA's side, in metres."""
+MAT_XY = ((0.075, 0.275), (-0.215, 0.085))
+"""Where cube centres may go: the mat (world x 0.06-0.29, y -0.23 to 0.10) less 15 mm at the edges."""
 
-# Cubes spawn on an arc in front of the arm, on the mat: x 0.13-0.30 m, y -0.12 to +0.09 m.
-SPAWN_CENTER = (0.06, -0.045)
-SPAWN_MIN_R, SPAWN_MAX_R = 0.09, 0.24
-SPAWN_ANGLE_HALF_DEG = 36.0
+# Cubes spawn on an arc in front of the arm, on the mat: x 0.12-0.27 m, y -0.06 to +0.08 m.
+SPAWN_CENTER = (0.0, -0.01)
+SPAWN_MIN_R, SPAWN_MAX_R = 0.13, 0.27
+SPAWN_ANGLE_HALF_DEG = 20.0
 CUBE_MIN_SEP = 0.08
 """Cube centres at least 8 cm apart, so the open jaws never touch a neighbour."""
 PLACE_MIN_SEP = 0.10
@@ -54,8 +56,8 @@ def reset_cubes(model: object, data: object, rng: np.random.Generator, robot_roo
     """Put the three cubes at random, well-separated positions with random yaws.
 
     The plugin's own sampler keeps the last draw when a crowded layout has no clear position
-    left; here a whole layout is drawn again until every cube is clear of the others, of the
-    PLACE AREA and of the arm.
+    left; here a whole layout is drawn again until every cube is on the mat and clear of the
+    others, of the PLACE AREA and of the arm.
     """
     import mujoco  # noqa: PLC0415
 
@@ -80,7 +82,9 @@ def reset_cubes(model: object, data: object, rng: np.random.Generator, robot_roo
         apart = all(np.hypot(*(p[a] - p[b])) >= CUBE_MIN_SEP for a in range(len(p)) for b in range(a))
         clear = all(np.hypot(*(q - PLACE_AREA_XY)) >= PLACE_MIN_SEP for q in p)
         off_arm = footprint is None or all(footprint.distance(tuple(q)) >= padding for q in p)
-        if apart and clear and off_arm:
+        (x0, x1), (y0, y1) = MAT_XY
+        on_mat = bool(np.all((p[:, 0] >= x0) & (p[:, 0] <= x1) & (p[:, 1] >= y0) & (p[:, 1] <= y1)))
+        if apart and clear and off_arm and on_mat:
             break
     for joint, xy in zip(CUBE_JOINTS, positions, strict=True):
         place_freejoint(model, data, joint, xy, rng, z=CUBE_HALF + 0.002)

@@ -74,6 +74,12 @@ python3 ~/intel-ai-summit-seoul-2026/hands-on/sim-reproduction/eval_drive.py --t
 
 ### M4 result
 
+<p align="center">
+  <img src="images/sim-m4-mat.png" alt="Simulated work mat with a millimetre grid, X and Y axes, and a dashed PLACE AREA" width="60%">
+  <br>
+  <em>The simulated work mat, with ticks to X 300 and Y 200 mm as on the session mat. The arm stands below the X axis at X = 100 mm, facing +Y.</em>
+</p>
+
 The hands-on scene, `handson_pick_place`, copies the session's table: blue, red, and yellow 2 cm cubes and a square PLACE AREA on a work mat with a millimetre grid. In drive mode the demonstrator moved the red cube into the PLACE AREA in **20 of 20 trials (100%)**; an episode judge in the scene counted each success and then reset the cubes to random positions.
 
 ```bash

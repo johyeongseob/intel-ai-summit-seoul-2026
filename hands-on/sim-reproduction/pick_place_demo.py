@@ -82,7 +82,7 @@ class PickPlaceStats:
 
 
 def handson_config(target_cube: str = "cube_red") -> PickPlaceConfig:
-    """Config for the hands-on scene: 2 cm cubes, a 53 mm square PLACE AREA about 32 cm out."""
+    """Config for the hands-on scene: 2 cm cubes, a 53 mm square PLACE AREA about 25 cm out."""
     return PickPlaceConfig(
         cube=target_cube,
         target="place_area",

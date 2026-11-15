@@ -1,6 +1,6 @@
 """Draw the work-mat texture for the hands-on scene: ``scenes/handson_mat.png``.
 
-Laid out like the session's workspace mat (without its printing or logos): a black 350 x 300 mm
+Laid out like the session's workspace mat (without its printing or logos): a black 330 x 230 mm (ticks to X 300, Y 200)
 mat with a 10 mm grid and a 50 mm major grid, an X axis along the long edge and a Y axis along
 the short edge, both in millimetres, and a dashed PLACE AREA.
 
@@ -24,12 +24,12 @@ from PIL import Image, ImageDraw, ImageFont
 OUT = Path(__file__).resolve().parent / "scenes" / "handson_mat.png"
 
 # Mat size in mm. Must match the `mat` geom in scenes/handson_pick_place.xml:
-# centre (0.06 + 0.150, 0.10 - 0.175) = (0.21, -0.075), half sizes (0.150, 0.175).
-MAT_X, MAT_Y = 350, 300
+# centre (0.06 + 0.115, 0.10 - 0.165) = (0.175, -0.065), half sizes (0.115, 0.165).
+MAT_X, MAT_Y = 330, 230
 PX_PER_MM = 4
 
-# PLACE AREA centre and side in mat mm. Must match the `place_area` body: world (0.285, -0.15).
-PLACE_X, PLACE_Y, PLACE_SIDE = 250, 225, 53
+# PLACE AREA centre and side in mat mm. Must match the `place_area` body: world (0.21, -0.13).
+PLACE_X, PLACE_Y, PLACE_SIDE = 230, 150, 53
 
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"

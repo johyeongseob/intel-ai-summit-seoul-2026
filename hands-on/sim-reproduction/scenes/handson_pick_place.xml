@@ -36,15 +36,15 @@
     <light pos="0 0 3.5" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5" castshadow="false"/>
     <geom name="floor" type="plane" size="0 0 0.01" pos="0 0 0" material="floor" condim="3" friction="0.5 0.005 0.0001"/>
 
-    <!-- Work mat: 35 x 30 cm, a visual layer 1 mm thick on the floor. As at the session, the arm
+    <!-- Work mat: 33 x 23 cm (ticks to X 300, Y 200 mm), a visual layer 1 mm thick on the floor. As at the session, the arm
          stands at its long edge (mat Y = 0) at mat X = 100 mm, facing across it (see make_mat_texture.py). -->
-    <geom name="mat" class="mark" size="0.15 0.175 0.0005" pos="0.21 -0.075 0.0005" material="mat"/>
+    <geom name="mat" class="mark" size="0.115 0.165 0.0005" pos="0.175 -0.065 0.0005" material="mat"/>
 
-    <!-- PLACE AREA: a 5.3 cm square drawn on the mat at mat (X 250, Y 225) mm. This body only marks its centre. -->
-    <body name="place_area" pos="0.285 -0.15 0.001"/>
+    <!-- PLACE AREA: a 5.3 cm square drawn on the mat at mat (X 230, Y 150) mm. This body only marks its centre. -->
+    <body name="place_area" pos="0.21 -0.13 0.001"/>
 
     <!-- The three cubes; every reset moves them to random positions in front of the arm. -->
-    <body name="cube_red" pos="0.21 0.05 0.01">
+    <body name="cube_red" pos="0.24 0.00 0.01">
       <joint type="free" name="cube_red:joint" damping="0" frictionloss="0" armature="0"/>
       <geom name="cube_red" type="box" size="0.01 0.01 0.01" rgba="0.90 0.12 0.10 1" mass="0.0045"/>
     </body>
@@ -52,7 +52,7 @@
       <joint type="free" name="cube_blue:joint" damping="0" frictionloss="0" armature="0"/>
       <geom name="cube_blue" type="box" size="0.01 0.01 0.01" rgba="0.10 0.38 0.95 1" mass="0.0045"/>
     </body>
-    <body name="cube_yellow" pos="0.29 0.03 0.01">
+    <body name="cube_yellow" pos="0.17 0.07 0.01">
       <joint type="free" name="cube_yellow:joint" damping="0" frictionloss="0" armature="0"/>
       <geom name="cube_yellow" type="box" size="0.01 0.01 0.01" rgba="1.00 0.84 0.05 1" mass="0.0045"/>
     </body>
